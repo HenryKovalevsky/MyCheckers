@@ -1,13 +1,13 @@
 <template>
-  <div class="board-container" :style="{ width: `${state.size}px`, height: `${state.size}px` }">
-    <div class="board" @click="proceed">
+  <div class="board-container">
+    <div :key="size" ref="board" class="board" @click="proceed">
       <div class="piece" v-for="item in gameState.pieces" :key="item.id" :style="{ transform: getPosition(item) }" :class="[{ selected: isSelected(item) }, getPieceForm(item)]"></div>
     </div>
   </div>
 </template>
 
 <script setup>
-  import { reactive } from "vue";
+  import { ref, onMounted, nextTick } from "vue";
 
   const props = defineProps({
     gameState: Object,
@@ -15,14 +15,14 @@
   });
   const emit = defineEmits(["move", "arrange"]);
 
-  const state = reactive({
-    size: 600,
-    selected: null,
-  });
-  const square = state.size / 8;
+  const boardSize = 8;
+
+  let size = ref(0);
+  let board = ref(null);
+  let selected = ref(null);
 
   function getPosition(item) {
-    return `translate(${item.x * square}px, ${item.y * square}px)`;
+    return `translate(${(item.x * size.value) / boardSize}px, ${(item.y * size.value) / boardSize}px)`;
   }
 
   function getPieceForm(item) {
@@ -30,30 +30,42 @@
   }
 
   function isSelected(item) {
-    return state.selected != null && state.selected.id == item.id;
+    return selected.value != null && selected.value.id == item.id;
   }
 
   function proceed(event) {
     if (props.player != props.gameState.currentPlayer) return;
 
     let rect = event.target.getBoundingClientRect();
-    let x = Math.floor((event.clientX - rect.left) / square);
-    let y = Math.floor((event.clientY - rect.top) / square);
+    let x = Math.floor((event.clientX - rect.left) / (rect.width / boardSize));
+    let y = Math.floor((event.clientY - rect.top) / (rect.height / boardSize));
 
     if (props.gameState.status == "Draft") {
       emit("arrange", { x: x, y: y });
     } else {
-      if (state.selected != null) {
-        emit("move", state.selected, { x: x, y: y });
+      if (selected.value != null) {
+        emit("move", selected.value, { x: x, y: y });
 
-        state.selected = null;
+        selected.value = null;
       } else {
         let piece = props.gameState.pieces.find((p) => p.player == props.player && p.x == x && p.y == y);
-        state.selected = piece;
+        selected.value = piece;
       }
     }
     console.log({ x, y });
   }
+
+  function onResize() {
+    let rect = board.value.getBoundingClientRect();
+    size.value = rect.width;
+  }
+
+  onMounted(() => {
+    nextTick(() => {
+      window.addEventListener("resize", onResize);
+      onResize();
+    });
+  });
 </script>
 
 <style>
@@ -65,8 +77,13 @@
     margin-top: 140px;
     margin-left: auto;
     margin-right: auto;
+
+    max-width: 600px;
+    width: 90%;
+    aspect-ratio: 1 / 1;
+    max-height: 600px;
   }
-  
+
   .board {
     position: absolute;
     top: 0;
@@ -75,6 +92,12 @@
     width: 100%;
     cursor: pointer;
     background-image: url("../assets/board.svg");
+  }
+
+  @media (max-width: 600px) {
+    .board {
+      cursor: auto;
+    }
   }
 
   .piece {

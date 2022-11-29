@@ -88,19 +88,19 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-top: 120px;
+    margin-top: 118px;
   }
 
   .links {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 400px;
+    width: 346px;
   }
 
   .rules {
-    margin-top: 60px;
-    width: 1200px;
+    margin: 36px 18px;
+    max-width: 1200px;
   }
 
   .button {

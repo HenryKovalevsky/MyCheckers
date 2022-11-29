@@ -93,8 +93,8 @@
   }
 
   let showTooltip = ref(false);
-  function clipLink() {
-    navigator.clipboard.writeText(link);
+  async function clipLink() {
+    await navigator.clipboard.writeText(link);
     showTooltip.value = true;
     setTimeout(function () {
       showTooltip.value = false;
@@ -103,6 +103,10 @@
 </script>
 
 <style scoped>
+  pre {
+    white-space: pre-line;
+  }
+
   .fade-leave-active {
     transition: opacity 0.5s ease;
   }
