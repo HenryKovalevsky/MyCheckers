@@ -1,4 +1,4 @@
-﻿module WebApp
+﻿module MyCheckers.WebApp
 
 open Suave
 open Suave.Filters
@@ -67,11 +67,11 @@ let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
       | (Text, data, true) ->
         let act = Bytes.deserialize<Act> data
 
-        let game = games.[gameId].Update(act)
+        game.Update(act) |> ignore
 
         for socket in sessions.GetConnections(gameId) do
           try
-            do! sendGameState game socket
+            do! sendGameState game.State socket
           with
               | _ -> loop <- false
 

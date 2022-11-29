@@ -1,4 +1,4 @@
-﻿module Storage
+﻿module MyCheckers.Storage
 
 open System.Collections.Concurrent
 

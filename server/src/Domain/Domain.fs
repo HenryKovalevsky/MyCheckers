@@ -1,4 +1,4 @@
-﻿module Domain
+﻿module MyCheckers.Domain
 
 type Column = | A | B | C | D | E | F | G | H
 type Row = | One | Two | Three | Four | Five | Six | Seven | Eight 

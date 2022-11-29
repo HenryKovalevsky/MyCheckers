@@ -1,4 +1,4 @@
-﻿module Engine
+﻿module MyCheckers.Engine
 
 open System
 
@@ -6,6 +6,7 @@ open Domain
 
 [<AutoOpen>]
 module private Internal =
+
   let (|IsSelected|_|) (state : GameState, prop : ProposedMove) =
     Board.getValue state.Board prop.From 
     |> snd
@@ -34,6 +35,27 @@ module private Internal =
       |> Seq.take ArrangeRows 
       |> Seq.tryFind ((=)row)
       |> Option.map (fun row -> column, row)
+
+  let getPossibleActs (state : GameState) =
+    match state.Status with
+    | Draft -> 
+        Row.list 
+        |> Seq.ofList
+        |> if state.CurrentPlayer = White then id else Seq.rev
+        |> Seq.take ArrangeRows
+        |> Seq.allPairs Column.list
+        |> Seq.filter (not << state.Board.ContainsKey)
+        |> Seq.map Arrange
+        |> Seq.toList
+    | Battle ->
+        let captures = Moves.getPossibleCaptures state
+
+        if not (Seq.isEmpty captures)
+        then captures
+        else Moves.getPossibleMoves state
+        |> Seq.map (fun move -> Move { From = move.From; To = move.To })
+        |> Seq.toList
+    | _ -> []
 
   let isPromotionSquare (player : Color) ((_, row) : Square)=
     if player = White
@@ -118,7 +140,7 @@ module private Internal =
     match act with
     | Arrange square when state.Status = Draft -> handleArrange state square
     | Move move when state.Status = Battle -> handleMove state move
-    | _ -> failwithf "Invalid game state: %A" state
+    | _ -> failwithf "Invalid act. State: %A" state
 
 type Game() =
   let mutable state =
@@ -131,5 +153,9 @@ type Game() =
   member _.State = state
 
   member _.Update(act : Act) =
+    let prev = state
     state <- updateGameState state act
-    state
+    prev <> state
+
+  member _.GetPossibleActs() =
+    getPossibleActs state

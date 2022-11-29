@@ -1,7 +1,7 @@
 ﻿open Suave
 open Suave.Logging
 
-open WebApp
+open MyCheckers.WebApp
 
 type CmdArgs = { IP: string; Port: int }
 
