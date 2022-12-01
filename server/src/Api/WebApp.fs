@@ -11,8 +11,9 @@ open Suave.WebSocket
 
 open Domain
 open Storage
+open System.Threading
 
-module Bytes =
+module ByteSegment =
   open System.Text
   open System.Text.Json
   open System.Text.Json.Serialization
@@ -24,38 +25,47 @@ module Bytes =
 
   let serialize obj = 
       JsonSerializer.Serialize(obj, options) 
-      |> Encoding.UTF8.GetBytes 
+      |> Encoding.UTF8.GetBytes
+      |> ByteSegment
 
   let deserialize<'t> data =  
       JsonSerializer.Deserialize<'t>(UTF8.toString data, options) 
+
+type WebSocket with
+  member this.sendByChunks chunkSize message = socket {
+
+    do! this.send Text ByteSegment.Empty false
+
+    let segments = 
+      message
+      |> Seq.chunkBySize chunkSize 
+      |> Seq.map ByteSegment
+
+    for segment in segments do
+      do! this.send Continuation segment false
+
+    do! this.send Continuation ByteSegment.Empty true
+  }
 
 let games = GameStorage()
 let sessions = SessionStorage()
 
 let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
-  let emptyResponse = [||] |> ByteSegment
-
-  let sendGameState game (webSocket : WebSocket) = socket {
-    do! webSocket.send Text emptyResponse false
-
-    let segments = 
-      game
-      |> Bytes.serialize 
-      |> Seq.chunkBySize 16 
-      |> Seq.map ByteSegment
-
-    for segment in segments do
-      do! webSocket.send Continuation segment false
-
-    do! webSocket.send Continuation emptyResponse true
-  }
+  let heartbeat =
+      async {
+        while true do
+          do! webSocket.send Ping ByteSegment.Empty true |> Async.Ignore
+          do! Async.Sleep 30_000 // ms
+      }
+  let cts = new CancellationTokenSource()
+  Async.Start(heartbeat, cts.Token)
 
   socket {
     sessions.Connect(gameId, webSocket) |> ignore
-    
+
     let game = games.[gameId]
 
-    do! sendGameState game.State webSocket
+    do! webSocket.sendByChunks 16 (ByteSegment.serialize game.State)
 
     let mutable loop = true
     while loop do
@@ -65,24 +75,24 @@ let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
       //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
       match msg with
       | (Text, data, true) ->
-        let act = Bytes.deserialize<Act> data
+        let act = ByteSegment.deserialize<Act> data
 
         game.Update(act) |> ignore
 
         for socket in sessions.GetConnections(gameId) do
           try
-            do! sendGameState game.State socket
+            do! socket.sendByChunks 16 (ByteSegment.serialize game.State)
           with
-              | _ -> loop <- false
-
-      | (Close, _, _) ->
-        do! webSocket.send Close emptyResponse true
-        loop <- false
+            | _ -> loop <- false
+          
+      | (Close, _, _) -> loop <- false
 
       | _ -> ()
 
+    cts.Cancel()
     sessions.Disconnect(gameId, webSocket)
   }
+
 
 let createGame (ctx : HttpContext) =
   let gameId = games.CreateGame()

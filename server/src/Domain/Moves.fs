@@ -1,4 +1,4 @@
-﻿module MyCheckers.Moves
+﻿module internal MyCheckers.Moves
 
 open Domain
 
