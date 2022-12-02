@@ -1,7 +1,11 @@
 <template>
   <div class="board-container">
-    <div :key="size" ref="board" class="board" @click="proceed">
-      <div class="piece" v-for="item in gameState.pieces" :key="item.id" :style="{ transform: getPosition(item) }" :class="[{ selected: isSelected(item) }, getPieceForm(item)]"></div>
+    <div class="board" :key="size" @click="proceed" ref="board">
+      <!-- prettier-ignore -->
+      <div class="piece" v-for="piece in gameState.board" 
+          :key="piece.id" 
+          :style="{ transform: getPosition(piece) }" 
+          :class="[{ selected: isSelected(piece) }, getPieceIcon(piece)]"></div>
     </div>
   </div>
 </template>
@@ -16,21 +20,25 @@
   const emit = defineEmits(["move", "arrange"]);
 
   const boardSize = 8;
+  const columns = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const rows = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
 
   let size = ref(0);
   let board = ref(null);
   let selected = ref(null);
 
-  function getPosition(item) {
-    return `translate(${(item.x * size.value) / boardSize}px, ${(item.y * size.value) / boardSize}px)`;
+  function getPosition(piece) {
+    const x = columns.findIndex((i) => i == piece.column);
+    const y = rows.findIndex((i) => i == piece.row);
+    return `translate(${(x * size.value) / boardSize}px, ${(y * size.value) / boardSize}px)`;
   }
 
-  function getPieceForm(item) {
-    return `${item.rank}-${item.player}`.toLowerCase();
+  function getPieceIcon(piece) {
+    return `${piece.rank}-${piece.player}`.toLowerCase();
   }
 
-  function isSelected(item) {
-    return selected.value != null && selected.value.id == item.id;
+  function isSelected(piece) {
+    return selected.value != null && selected.value.id == piece.id;
   }
 
   function proceed(event) {
@@ -40,19 +48,25 @@
     let x = Math.floor((event.clientX - rect.left) / (rect.width / boardSize));
     let y = Math.floor((event.clientY - rect.top) / (rect.height / boardSize));
 
-    if (props.gameState.status == "Draft") {
-      emit("arrange", { x: x, y: y });
-    } else {
-      if (selected.value != null) {
-        emit("move", selected.value, { x: x, y: y });
+    switch (props.gameState.status) {
+      case "Draft":
+        emit("arrange", [columns[x], rows[y]]);
+        break;
 
-        selected.value = null;
-      } else {
-        let piece = props.gameState.pieces.find((p) => p.player == props.player && p.x == x && p.y == y);
-        selected.value = piece;
-      }
+      case "Battle":
+        if (selected.value != null) {
+          const from = [selected.value.column, selected.value.row];
+          const to = [columns[x], rows[y]];
+
+          emit("move", from, to);
+
+          selected.value = null;
+        } else {
+          let piece = props.gameState.board.find((p) => p.player == props.player && p.column == columns[x] && p.row == rows[y]);
+          selected.value = piece;
+        }
+        break;
     }
-    console.log({ x, y });
   }
 
   function onResize() {

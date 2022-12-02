@@ -27,10 +27,10 @@
 
   const competitor = props.player == "White" ? "b" : "w";
   const wsUrl = `${window.location.protocol === "https:" ? "wss://" : "ws://"}${window.location.host}/ws/${props.gameId}`;
-  const link = `${window.location.protocol}//${window.location.host}/?uid=${props.gameId}&p=${competitor}`;
+  const competitorLink = `${window.location.protocol}//${window.location.host}/?uid=${props.gameId}&p=${competitor}`;
 
   let gameState = reactive({
-    pieces: [],
+    board: [],
     currentPlayer: null,
     status: null,
   });
@@ -45,56 +45,68 @@
     console.log(event);
   }
 
-  const columns = ["A", "B", "C", "D", "E", "F", "G", "H"];
-  const rows = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
-
   function update(event) {
     let game = JSON.parse(event.data);
 
-    gameState.pieces = game.board.map((arr) => {
-      let [column, row] = arr[0];
-      let piece = arr[1];
+    gameState.currentPlayer = game.currentPlayer;
+    gameState.status = game.status;
+
+    const board = game.board.map((arr) => {
+      let [[column, row], piece] = arr;
+
       return {
-        x: columns.findIndex((i) => i == column),
-        y: rows.findIndex((i) => i == row),
+        column: column,
+        row: row,
         rank: piece.rank,
         player: piece.player,
         id: piece.id,
       };
     });
 
-    gameState.currentPlayer = game.currentPlayer;
-    gameState.status = game.status;
+    const diff = diffBoards(gameState.board, board);
+
+    diff.toAdd.forEach((piece) => gameState.board.push(piece));
+
+    diff.toUpdate.forEach((piece) => {
+      const index = gameState.board.findIndex((p) => p.id == piece.id);
+      gameState.board.splice(index, 1, piece);
+    });
+
+    diff.toDelete.forEach((piece) => {
+      const index = gameState.board.findIndex((p) => p.id == piece.id);
+      gameState.board.splice(index, 1);
+    });
 
     console.log(gameState);
   }
 
+  function diffBoards(prev, current) {
+    let toAdd = current.filter((piece) => !prev.some((p) => p.id == piece.id));
+    let toUpdate = current.filter((piece) => prev.some((p) => p.id == piece.id && (p.column != piece.column || p.row != piece.row)));
+    let toDelete = prev.filter((piece) => !current.some((p) => p.id == piece.id));
+
+    return {
+      toAdd: toAdd,
+      toUpdate: toUpdate,
+      toDelete: toDelete,
+    };
+  }
+
   function move(from, to) {
-    const message = JSON.stringify([
-      "Move",
-      {
-        from: [columns[from.x], rows[from.y]],
-        to: [columns[to.x], rows[to.y]],
-      },
-    ]);
+    const message = JSON.stringify(["Move", { from: from, to: to }]);
 
     websocket.send(message);
-
-    // const piece = pieces.find((p) => p.id == id);
-    // const index = pieces.findIndex((p) => p.id == id);
-    // pieces.splice(index, 1, Object.assign(piece, coords));
-    // console.log(pieces);
   }
 
   function arrange(to) {
-    const message = JSON.stringify(["Arrange", [columns[to.x], rows[to.y]]]);
+    const message = JSON.stringify(["Arrange", to]);
 
     websocket.send(message);
   }
 
   let showTooltip = ref(false);
   async function clipLink() {
-    await navigator.clipboard.writeText(link);
+    await navigator.clipboard.writeText(competitorLink);
     showTooltip.value = true;
     setTimeout(function () {
       showTooltip.value = false;
