@@ -1,33 +1,30 @@
 <template>
-  <GameBoard :player="player" :gameState="gameState" @move="move" @arrange="arrange" />
+  <GameBoard :player="player" :board="gameState.board" @act="session.act" />
 
   <code style="display: flex; flex-direction: column; align-items: center">
-    <pre v-if="gameState.status == 'Draft'">
-      {{ gameState.status }} stage. {{ gameState.currentPlayer }}'s turn to set piece.
-    </pre>
-    <pre v-else-if="gameState.status == 'Battle'">
-      {{ gameState.status }} stage. {{ gameState.currentPlayer }}'s turn to move.
-    </pre>
-    <pre v-else-if="gameState.status != null">
-      {{ gameState.status[0] }} of {{ gameState.status[1] }}.
-    </pre>
-
-    <button @click="clipLink" style="" class="button">Copy competitor's invitation link</button><Transition name="fade"><span v-if="showTooltip">Copied!</span></Transition>
+    <pre>{{ getStatus(gameState) }}</pre>
+    <button @click="clipLink" style="" class="button">Copy competitor's invitation link</button>
+    <Transition name="fade"><span v-if="showTooltip">Copied!</span></Transition>
   </code>
 </template>
 
 <script setup>
-  import { reactive, ref } from "vue";
   import GameBoard from "./GameBoard.vue";
+  import Consts from "../core/Constants.js";
+
+  import { reactive, ref } from "vue";
+  import { initGameSession } from "../core/GameSession.js";
+  import { buildLink, buildWsUrl } from "../core/Helpers.js";
 
   const props = defineProps({
     gameId: String,
     player: String,
   });
 
-  const competitor = props.player == "White" ? "b" : "w";
-  const wsUrl = `${window.location.protocol === "https:" ? "wss://" : "ws://"}${window.location.host}/ws/${props.gameId}`;
-  const competitorLink = `${window.location.protocol}//${window.location.host}/?uid=${props.gameId}&p=${competitor}`;
+  const competitor = props.player == Consts.player.WHITE ? Consts.player.BLACK : Consts.player.WHITE;
+
+  const wsUrl = buildWsUrl(props.gameId);
+  const competitorLink = buildLink(props.gameId, competitor);
 
   let gameState = reactive({
     board: [],
@@ -35,74 +32,29 @@
     status: null,
   });
 
-  var websocket = new WebSocket(wsUrl);
-  websocket.onopen = logEvent;
-  websocket.onclose = logEvent;
-  websocket.onerror = logEvent;
-  websocket.onmessage = update;
+  const session = initGameSession(props.player, wsUrl, gameState);
 
-  function logEvent(event) {
-    console.log(event);
-  }
+  const getStatus = (state) => {
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
 
-  function update(event) {
-    let game = JSON.parse(event.data);
+    switch (state.status) {
+      case null:
+        break;
 
-    gameState.currentPlayer = game.currentPlayer;
-    gameState.status = game.status;
+      case Consts.status.DRAFT:
+        return `Draft stage. ${capitalize(state.currentPlayer)}'s turn to set piece.`;
 
-    const board = game.board.map((arr) => {
-      let [[column, row], piece] = arr;
+      case Consts.status.BATTLE:
+        return `Battle stage. ${capitalize(state.currentPlayer)}'s turn to move.`;
 
-      return {
-        column: column,
-        row: row,
-        rank: piece.rank,
-        player: piece.player,
-        id: piece.id,
-      };
-    });
+      case Consts.status.DRAW:
+        return `Draw.`;
 
-    const diff = diffBoards(gameState.board, board);
-
-    diff.toAdd.forEach((piece) => gameState.board.push(piece));
-
-    diff.toUpdate.forEach((piece) => {
-      const index = gameState.board.findIndex((p) => p.id == piece.id);
-      gameState.board.splice(index, 1, piece);
-    });
-
-    diff.toDelete.forEach((piece) => {
-      const index = gameState.board.findIndex((p) => p.id == piece.id);
-      gameState.board.splice(index, 1);
-    });
-
-    console.log(gameState);
-  }
-
-  function diffBoards(prev, current) {
-    let toAdd = current.filter((piece) => !prev.some((p) => p.id == piece.id));
-    let toUpdate = current.filter((piece) => prev.some((p) => p.id == piece.id && (p.column != piece.column || p.row != piece.row)));
-    let toDelete = prev.filter((piece) => !current.some((p) => p.id == piece.id));
-
-    return {
-      toAdd: toAdd,
-      toUpdate: toUpdate,
-      toDelete: toDelete,
-    };
-  }
-
-  function move(from, to) {
-    const message = JSON.stringify(["Move", { from: from, to: to }]);
-
-    websocket.send(message);
-  }
-
-  function arrange(to) {
-    const message = JSON.stringify(["Arrange", to]);
-
-    websocket.send(message);
-  }
+      default:
+        const [[status, player]] = Object.entries(state.status);
+        return `${capitalize(status)} of ${capitalize(player)}.`;
+    }
+  };
 
   let showTooltip = ref(false);
   async function clipLink() {

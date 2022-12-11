@@ -29,29 +29,26 @@
 </template>
 
 <script setup>
-  import { reactive } from "vue";
   import GameSession from "./components/GameSession.vue";
-
-  const params = new Proxy(new URLSearchParams(window.location.search), {
-    get: (searchParams, prop) => searchParams.get(prop),
-  });
-
-  let gameId = params.uid;
-  const player = params.p == "w" ? "White" : "Black";
+  import Consts from "./core/Constants.js";
+  
+  import { reactive } from "vue";
+  import { getParams, buildLink } from "./core/Helpers.js";
 
   let links = reactive({
     whitePlayerLink: null,
     blackPlayerLink: null,
   });
 
+  const { gameId, player } = getParams();
+
   async function createGame() {
     let respone = await fetch("/api/games", { method: "POST" });
 
     const gameId = await respone.text();
-    const link = `${window.location.protocol}//${window.location.host}/?uid=${gameId}`;
 
-    links.whitePlayerLink = link + "&p=w";
-    links.blackPlayerLink = link + "&p=b";
+    links.whitePlayerLink = buildLink(gameId, Consts.player.WHITE);
+    links.blackPlayerLink = buildLink(gameId, Consts.player.BLACK);
   }
 </script>
 

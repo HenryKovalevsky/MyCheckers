@@ -11,17 +11,16 @@ open Suave.WebSocket
 
 open Domain
 open Storage
-open System.Threading
 
-module ByteSegment =
+module JsonSerializer =
   open System.Text
   open System.Text.Json
   open System.Text.Json.Serialization
 
+  type private E = JsonUnionEncoding
+  let encoding = E.ExternalTag ||| E.UnwrapFieldlessTags ||| E.UnwrapSingleFieldCases ||| E.UnwrapOption
   let private options = JsonSerializerOptions(WriteIndented = false, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
-  options.Converters.Add(JsonFSharpConverter(JsonUnionEncoding.InternalTag ||| JsonUnionEncoding.UnwrapFieldlessTags))
-
-  let ser obj = JsonSerializer.Serialize(obj, options) 
+  options.Converters.Add(JsonFSharpConverter(encoding, unionTagNamingPolicy = JsonNamingPolicy.CamelCase))
 
   let serialize obj = 
       JsonSerializer.Serialize(obj, options) 
@@ -57,7 +56,7 @@ let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
           do! webSocket.send Ping ByteSegment.Empty true |> Async.Ignore
           do! Async.Sleep 30_000 // ms
       }
-  let cts = new CancellationTokenSource()
+  let cts = new System.Threading.CancellationTokenSource()
   Async.Start(heartbeat, cts.Token)
 
   socket {
@@ -65,7 +64,7 @@ let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
 
     let game = games.[gameId]
 
-    do! webSocket.sendByChunks 16 (ByteSegment.serialize game.State)
+    do! webSocket.sendByChunks 16 (JsonSerializer.serialize game.State)
 
     let mutable loop = true
     while loop do
@@ -75,13 +74,13 @@ let gameSession (gameId : string) (webSocket : WebSocket) (_ : HttpContext) =
       //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
       match msg with
       | (Text, data, true) ->
-        let act = ByteSegment.deserialize<Act> data
+        let act = JsonSerializer.deserialize<Act> data
 
         game.Update(act) |> ignore
 
         for socket in sessions.GetConnections(gameId) do
           try
-            do! socket.sendByChunks 16 (ByteSegment.serialize game.State)
+            do! socket.sendByChunks 16 (JsonSerializer.serialize game.State)
           with
             | _ -> loop <- false
           
