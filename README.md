@@ -10,7 +10,7 @@ I was reminded of those days and I wanted to implement the game since I can reme
 
 ## Game
 
-The exact rules and demo can be found [here](https://checkers.henrykovalevsky.space).
+The exact rules and demo can be found [here](https://github.com/HenryKovalevsky/MyCheckers/blob/cd43adab7c5dfbf9f1fc8e29e2fabadee3df2bc3/client/src/App.vue#L13).
 
 ## Prerequisites
 
